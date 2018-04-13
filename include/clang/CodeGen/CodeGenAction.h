@@ -11,6 +11,7 @@
 #define LLVM_CLANG_CODEGEN_CODEGENACTION_H
 
 #include "clang/Frontend/FrontendAction.h"
+#include "clang/CodeGen/BackendUtil.h"
 #include <memory>
 
 namespace llvm {
@@ -20,22 +21,30 @@ namespace llvm {
 
 namespace clang {
 class BackendConsumer;
+class CoverageSourceInfo;
 
 class CodeGenAction : public ASTFrontendAction {
-private:
+protected:
   unsigned Act;
   std::unique_ptr<llvm::Module> TheModule;
   llvm::Module *LinkModule;
   llvm::LLVMContext *VMContext;
   bool OwnsVMContext;
 
-protected:
   /// Create a new code generation action.  If the optional \p _VMContext
   /// parameter is supplied, the action uses it without taking ownership,
   /// otherwise it creates a fresh LLVM context and takes ownership.
   CodeGenAction(unsigned _Act, llvm::LLVMContext *_VMContext = nullptr);
 
   bool hasIRSupport() const override;
+
+  /// Helpers called in CreateASTConsumer
+  llvm::Module *getLinkModuleToUse(CompilerInstance &CI);
+  CoverageSourceInfo *getCoverageInfo(CompilerInstance &CI);
+
+  /// Helper called in ExecuteAction.  Returns true if the compilation is
+  /// invalid and should therefore be aborted.
+  bool ExecuteActionIRCommon(BackendAction &BA, CompilerInstance &CI);
 
   std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
                                                  StringRef InFile) override;
@@ -96,6 +105,23 @@ class EmitObjAction : public CodeGenAction {
   virtual void anchor();
 public:
   EmitObjAction(llvm::LLVMContext *_VMContext = nullptr);
+};
+
+/// Emit multiple object files using a single set of IR.  Used by the Popcorn
+/// Linux compiler toolchain.
+class EmitMultiObjAction : public CodeGenAction {
+  virtual void anchor();
+  SmallVector<std::string, 2> Targets;
+  SmallVector<raw_pwrite_stream *, 2> OutFiles;
+  SmallVector<std::shared_ptr<TargetOptions>, 2> TargetOpts;
+  SmallVector<TargetInfo *, 2> TargetInfos;
+protected:
+  bool InitializeTargets(CompilerInstance &CI, StringRef InFile);
+  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
+                                                 StringRef InFile) override;
+  void ExecuteAction() override;
+public:
+  EmitMultiObjAction(llvm::LLVMContext *_VMContext = nullptr);
 };
 
 }

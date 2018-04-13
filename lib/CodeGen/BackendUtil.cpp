@@ -15,6 +15,7 @@
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/Utils.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Bitcode/BitcodeWriterPass.h"
@@ -39,6 +40,7 @@
 #include "llvm/Transforms/Instrumentation.h"
 #include "llvm/Transforms/ObjCARC.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils.h"
 #include "llvm/Transforms/Utils/SymbolRewriter.h"
 #include <memory>
 using namespace clang;
@@ -131,6 +133,16 @@ public:
   }
 
   std::unique_ptr<TargetMachine> TM;
+
+  /// Set up the assembly helper, including gathering passes
+  void SetupAssemblyHelper(BackendAction Action,
+                           raw_pwrite_stream *OS);
+
+  /// Run only IR optimization passes on a module
+  void ApplyIROptPasses(Module* TheModule);
+
+  /// Run backend passes to generate code
+  void ApplyCodegenPasses(Module* TheModule);
 
   void EmitAssembly(BackendAction Action, raw_pwrite_stream *OS);
 };
@@ -269,6 +281,17 @@ static void addSymbolRewriterPass(const CodeGenOptions &Opts,
     MapParser.parse(MapFile, &DL);
 
   MPM->add(createRewriteSymbolsPass(DL));
+}
+
+static void addPopcornMigPointPasses(const PassManagerBuilder &Builder,
+                                     legacy::PassManagerBase &PM) {
+  PM.add(createSelectMigrationPointsPass());
+}
+
+static void addPopcornAlignmentPasses(const PassManagerBuilder &Builder,
+                                      legacy::PassManagerBase &PM) {
+  PM.add(createNameStringLiteralsPass());
+  PM.add(createStaticVarSectionsPass());
 }
 
 void EmitAssemblyHelper::CreatePasses() {
@@ -418,6 +441,26 @@ void EmitAssemblyHelper::CreatePasses() {
     Options.NoRedZone = CodeGenOpts.DisableRedZone;
     Options.InstrProfileOutput = CodeGenOpts.InstrProfileOutput;
     MPM->add(createInstrProfilingPass(Options));
+  }
+
+  // Popcorn Compiler Toolchain passes -- add after IR optimization passes
+  // Select migration points.
+  if (CodeGenOpts.PopcornMigratable) {
+    if (OptLevel > 0)
+      PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                             addPopcornMigPointPasses);
+    else MPM->add(createSelectMigrationPointsPass());
+  }
+
+  // Adjust global symbol linkage for alignment.
+  if (CodeGenOpts.PopcornAlignment) {
+    if (OptLevel > 0)
+      PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                             addPopcornAlignmentPasses);
+    else {
+      MPM->add(createNameStringLiteralsPass());
+      MPM->add(createStaticVarSectionsPass());
+    }
   }
 
   PMBuilder.populateModulePassManager(*MPM);
@@ -570,7 +613,7 @@ bool EmitAssemblyHelper::AddEmitPasses(BackendAction Action,
   // Normal mode, emit a .s or .o file by running the code generator. Note,
   // this also adds codegenerator level optimization passes.
   TargetMachine::CodeGenFileType CGFT = TargetMachine::CGFT_AssemblyFile;
-  if (Action == Backend_EmitObj)
+  if (Action == Backend_EmitObj || Action == Backend_EmitMultiObj)
     CGFT = TargetMachine::CGFT_ObjectFile;
   else if (Action == Backend_EmitMCNull)
     CGFT = TargetMachine::CGFT_Null;
@@ -592,8 +635,8 @@ bool EmitAssemblyHelper::AddEmitPasses(BackendAction Action,
   return true;
 }
 
-void EmitAssemblyHelper::EmitAssembly(BackendAction Action,
-                                      raw_pwrite_stream *OS) {
+void EmitAssemblyHelper::SetupAssemblyHelper(BackendAction Action,
+                                             raw_pwrite_stream *OS) {
   TimeRegion Region(llvm::TimePassesIsEnabled ? &CodeGenerationTime : nullptr);
 
   bool UsesCodeGen = (Action != Backend_EmitNothing &&
@@ -629,7 +672,9 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action,
 
   // Before executing passes, print the final values of the LLVM options.
   cl::PrintOptionValues();
+}
 
+void EmitAssemblyHelper::ApplyIROptPasses(Module* M) {
   // Run passes. For now we do all passes at once, but eventually we
   // would like to have the option of streaming code generation.
 
@@ -647,11 +692,20 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action,
     PrettyStackTraceString CrashInfo("Per-module optimization passes");
     PerModulePasses->run(*TheModule);
   }
+}
 
+void EmitAssemblyHelper::ApplyCodegenPasses(Module* M) {
   if (CodeGenPasses) {
     PrettyStackTraceString CrashInfo("Code generation");
     CodeGenPasses->run(*TheModule);
   }
+}
+
+void EmitAssemblyHelper::EmitAssembly(BackendAction Action,
+                                      raw_pwrite_stream *OS) {
+  SetupAssemblyHelper(Action, OS);
+  ApplyIROptPasses(TheModule);
+  ApplyCodegenPasses(TheModule);
 }
 
 void clang::EmitBackendOutput(DiagnosticsEngine &Diags,
@@ -676,4 +730,39 @@ void clang::EmitBackendOutput(DiagnosticsEngine &Diags,
       Diags.Report(DiagID) << DLDesc << TDesc;
     }
   }
+}
+
+void clang::ApplyIROptimizations(DiagnosticsEngine &Diags,
+                                 const CodeGenOptions &CGOpts,
+                                 const clang::TargetOptions &TOpts,
+                                 const LangOptions &LOpts, Module *M,
+                                 BackendAction Action, raw_pwrite_stream *OS) {
+  EmitAssemblyHelper AsmHelper(Diags, CGOpts, TOpts, LOpts, M);
+  AsmHelper.SetupAssemblyHelper(Action, OS);
+  AsmHelper.ApplyIROptPasses(M);
+}
+
+void clang::CodegenBackendOutput(DiagnosticsEngine &Diags,
+                                 const CodeGenOptions &CGOpts,
+                                 const clang::TargetOptions &TOpts,
+                                 const LangOptions &LOpts, StringRef TDesc,
+                                 Module *M, BackendAction Action,
+                                 raw_pwrite_stream *OS) {
+  EmitAssemblyHelper AsmHelper(Diags, CGOpts, TOpts, LOpts, M);
+  AsmHelper.SetupAssemblyHelper(Action, OS);
+
+  // If an optional clang TargetInfo description string was passed in, use it to
+  // verify the LLVM TargetMachine's DataLayout.
+  if (AsmHelper.TM && !TDesc.empty()) {
+    std::string DLDesc =
+        AsmHelper.TM->getDataLayout()->getStringRepresentation();
+    if (DLDesc != TDesc) {
+      unsigned DiagID = Diags.getCustomDiagID(
+          DiagnosticsEngine::Error, "backend data layout '%0' does not match "
+                                    "expected target description '%1'");
+      Diags.Report(DiagID) << DLDesc << TDesc;
+    }
+  }
+
+  AsmHelper.ApplyCodegenPasses(M);
 }

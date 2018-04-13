@@ -374,6 +374,10 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   }
   Opts.OptimizationLevel = OptimizationLevel;
 
+  // TODO Popcorn: until we can limit optimizations across migration points, we
+  // need to turn off backend optimizations
+  if (Args.hasArg(OPT_popcorn_migratable)) Opts.OptimizationLevel = 0;
+
   // We must always run at least the always inlining pass.
   Opts.setInlining(
     (Opts.OptimizationLevel > 1) ? CodeGenOptions::NormalInlining
@@ -675,6 +679,16 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.CudaGpuBinaryFileNames =
       Args.getAllArgValues(OPT_fcuda_include_gpubinary);
 
+  Opts.PopcornAlignment = Args.hasArg(OPT_popcorn_alignment);
+  Opts.PopcornMigratable = Args.hasArg(OPT_popcorn_migratable);
+
+  // TODO: the Popcorn compiler doesn't currently support vectorization
+  if(Opts.PopcornMigratable || Args.hasArg(OPT_popcorn_libc)) {
+    Opts.VectorizeBB = 0;
+    Opts.VectorizeLoop = 0;
+    Opts.VectorizeSLP = 0;
+  }
+
   return Success;
 }
 
@@ -856,7 +870,11 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
     case OPT_emit_codegen_only:
       Opts.ProgramAction = frontend::EmitCodeGenOnly; break;
     case OPT_emit_obj:
-      Opts.ProgramAction = frontend::EmitObj; break;
+      if(Args.hasArg(OPT_popcorn_migratable))
+        Opts.ProgramAction = frontend::EmitMultiObj;
+      else
+        Opts.ProgramAction = frontend::EmitObj;
+      break;
     case OPT_fixit_EQ:
       Opts.FixItSuffix = A->getValue();
       // fall-through!
@@ -1803,6 +1821,7 @@ static void ParsePreprocessorOutputArgs(PreprocessorOutputOptions &Opts,
   case frontend::EmitLLVMOnly:
   case frontend::EmitCodeGenOnly:
   case frontend::EmitObj:
+  case frontend::EmitMultiObj:
   case frontend::FixIt:
   case frontend::GenerateModule:
   case frontend::GeneratePCH:

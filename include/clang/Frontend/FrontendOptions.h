@@ -37,6 +37,7 @@ namespace frontend {
     EmitLLVMOnly,           ///< Generate LLVM IR, but do not emit anything.
     EmitCodeGenOnly,        ///< Generate machine code, but don't emit anything.
     EmitObj,                ///< Emit a .o file.
+    EmitMultiObj,           ///< Emit a .o file for multiple ISAs.
     FixIt,                  ///< Parse and apply any fixits to the source.
     GenerateModule,         ///< Generate pre-compiled module.
     GeneratePCH,            ///< Generate pre-compiled header.

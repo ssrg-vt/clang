@@ -28,13 +28,32 @@ namespace clang {
     Backend_EmitLL,        ///< Emit human-readable LLVM assembly
     Backend_EmitNothing,   ///< Don't emit anything (benchmarking mode)
     Backend_EmitMCNull,    ///< Run CodeGen, but don't emit anything
-    Backend_EmitObj        ///< Emit native object files
+    Backend_EmitObj,       ///< Emit native object files
+    Backend_EmitMultiObj   ///< Emit native object files for multiple ISAs
   };
 
+  /// Run both IR optimization passes and backend passes to generate code
   void EmitBackendOutput(DiagnosticsEngine &Diags, const CodeGenOptions &CGOpts,
                          const TargetOptions &TOpts, const LangOptions &LOpts,
                          StringRef TDesc, llvm::Module *M, BackendAction Action,
                          raw_pwrite_stream *OS);
+
+  /// Run IR optimization passes
+  void ApplyIROptimizations(DiagnosticsEngine &Diags,
+                            const CodeGenOptions &CGOpts,
+                            const TargetOptions &TOpts,
+                            const LangOptions &LOpts,
+                            llvm::Module *M, BackendAction Action,
+                            raw_pwrite_stream *OS);
+
+  /// Run backend code-generation passes
+  void CodegenBackendOutput(DiagnosticsEngine &Diags,
+                            const CodeGenOptions &CGOpts,
+                            const TargetOptions &TOpts,
+                            const LangOptions &LOpts,
+                            StringRef TDesc, llvm::Module *M,
+                            BackendAction Action,
+                            raw_pwrite_stream *OS);
 }
 
 #endif

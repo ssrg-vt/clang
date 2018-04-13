@@ -50,6 +50,7 @@ static FrontendAction *CreateFrontendBaseAction(CompilerInstance &CI) {
   case EmitLLVMOnly:           return new EmitLLVMOnlyAction();
   case EmitCodeGenOnly:        return new EmitCodeGenOnlyAction();
   case EmitObj:                return new EmitObjAction();
+  case EmitMultiObj:           return new EmitMultiObjAction();
   case FixIt:                  return new FixItAction();
   case GenerateModule:         return new GenerateModuleAction;
   case GeneratePCH:            return new GeneratePCHAction;

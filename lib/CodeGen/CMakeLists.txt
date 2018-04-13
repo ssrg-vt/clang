@@ -73,6 +73,7 @@ add_clang_library(clangCodeGen
   MicrosoftCXXABI.cpp
   ModuleBuilder.cpp
   ObjectFilePCHContainerOperations.cpp
+  PopcornUtil.cpp
   SanitizerMetadata.cpp
   TargetInfo.cpp
 

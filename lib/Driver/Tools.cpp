@@ -4934,6 +4934,36 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       A->render(Args, CmdArgs);
   }
 
+  // Forward Popcorn & other standard compiler flags to -cc1 to generate
+  // multi-ISA binaries
+  if(Args.hasArg(options::OPT_popcorn_migratable)) {
+    // Full-blown Popcorn migration capabilities, including adding migration
+    // points, symbol alignment and generating stack transformation metadata
+    CmdArgs.push_back("-ffunction-sections");
+    CmdArgs.push_back("-fdata-sections");
+    CmdArgs.push_back("-popcorn-alignment");
+    CmdArgs.push_back("-popcorn-migratable");
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-popcorn-instrument=migration");
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-optimize-regalloc");
+  }
+  else if(Args.hasArg(options::OPT_popcorn_libc)) {
+    // Symbol alignment for libc & generate stack transformation metadata for
+    // libc thread start functions
+    CmdArgs.push_back("-ffunction-sections");
+    CmdArgs.push_back("-fdata-sections");
+    CmdArgs.push_back("-popcorn-alignment");
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-popcorn-instrument=libc");
+  }
+  else if(Args.hasArg(options::OPT_popcorn_alignment)) {
+    // Only symbol alignment
+    CmdArgs.push_back("-ffunction-sections");
+    CmdArgs.push_back("-fdata-sections");
+    CmdArgs.push_back("-popcorn-alignment");
+  }
+
   // With -save-temps, we want to save the unoptimized bitcode output from the
   // CompileJobAction, so disable optimizations if they are not already
   // disabled.
