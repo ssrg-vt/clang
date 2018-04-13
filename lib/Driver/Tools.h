@@ -264,6 +264,38 @@ namespace ppc {
   bool hasPPCAbiArg(const llvm::opt::ArgList &Args, const char *Value);
 }
 
+/// hermit -- Directly call GNU Binutils assembler and linker
+namespace hermit {
+	class LLVM_LIBRARY_VISIBILITY Assemble : public GnuTool {
+		public:
+			Assemble(const ToolChain &TC) : GnuTool("hermit::Assemble",
+					"assembler", TC) {}
+			
+			bool hasIntegratedCPP() const override { return false; }
+
+			void ConstructJob(Compilation &C, const JobAction &JA,
+					const InputInfo &Output,
+					const InputInfoList &Inputs,
+					const llvm::opt::ArgList &TCArgs,
+					const char *LinkingOutput) const override;
+	};
+
+	class LLVM_LIBRARY_VISIBILITY Link : public GnuTool {
+		public:
+			Link(const ToolChain &TC) : GnuTool("hermit::Link", "linker",
+					TC) {}
+
+			bool hasIntegratedCPP() const override { return false; }
+			bool isLinkJob() const override { return true; }
+
+			void ConstructJob(Compilation &C, const JobAction &JA,
+					const InputInfo &Output,
+					const InputInfoList &Inputs,
+					const llvm::opt::ArgList &TCArgs,
+					const char *LinkingOutput) const override;
+	};
+} // end namespace hermit
+
 /// cloudabi -- Directly call GNU Binutils linker
 namespace cloudabi {
 class LLVM_LIBRARY_VISIBILITY Linker : public GnuTool {

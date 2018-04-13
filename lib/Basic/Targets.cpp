@@ -185,6 +185,24 @@ static void getDarwinDefines(MacroBuilder &Builder, const LangOptions &Opts,
 }
 
 namespace {
+
+
+// Hermit target
+template<typename Target>
+class HermitTargetInfo : public OSTargetInfo<Target> {
+	protected:
+		void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
+				MacroBuilder &Builder) const override {
+			Builder.defineMacro("__hermit__");
+		}
+
+	public:
+		HermitTargetInfo(const llvm::Triple &Triple) : 
+			OSTargetInfo<Target>(Triple) {
+			//this->UserLabelPrefix = "";
+		}
+};
+
 // CloudABI Target
 template <typename Target>
 class CloudABITargetInfo : public OSTargetInfo<Target> {
@@ -7331,6 +7349,8 @@ static TargetInfo *AllocateTarget(const llvm::Triple &Triple) {
       return new DarwinX86_64TargetInfo(Triple);
 
     switch (os) {
+	case llvm::Triple::Hermit:
+		return new HermitTargetInfo<X86_64TargetInfo>(Triple);
     case llvm::Triple::CloudABI:
       return new CloudABITargetInfo<X86_64TargetInfo>(Triple);
     case llvm::Triple::Linux: {

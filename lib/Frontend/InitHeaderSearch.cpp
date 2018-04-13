@@ -265,6 +265,10 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     break;
   }
 
+  case llvm::Triple::Hermit:
+    //AddPath("/usr/local/include", System, false);
+	break;
+
   case llvm::Triple::Haiku:
     AddPath("/boot/common/include", System, false);
     AddPath("/boot/develop/headers/os", System, false);

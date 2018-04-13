@@ -9547,3 +9547,135 @@ void tools::SHAVE::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
   C.addCommand(
       llvm::make_unique<Command>(JA, *this, Args.MakeArgString(Exec), CmdArgs));
 }
+
+void hermit::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
+									const InputInfo &Output,
+									const InputInfoList &Inputs,
+									const ArgList &Args,
+									const char *LinkingOutput) const {
+	ArgStringList CmdArgs;
+
+	Args.AddAllArgValues(CmdArgs, options::OPT_Wa_COMMA, options::OPT_Xassembler);
+
+	CmdArgs.push_back("-o");
+	CmdArgs.push_back(Output.getFilename());
+
+	for (const auto &II : Inputs)
+		CmdArgs.push_back(II.getFilename());
+
+	const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("x86_64-hermit-as"));
+	C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs));
+}
+
+#if 0
+void hermit::Link::ConstructJob(Compilation &C, const JobAction &JA,
+									const InputInfo &Output,
+									const InputInfoList &Inputs,
+									const ArgList &Args,
+									const char *LinkingOutput) const {
+	const Driver &D = getToolChain().getDriver();
+	ArgStringList CmdArgs;
+
+	if (Output.isFilename()) {
+		CmdArgs.push_back("-o");
+		CmdArgs.push_back(Output.getFilename());
+	} else {
+		assert(Output.isNothing() && "Invalid output.");
+	}
+
+	/* if (!Args.hasArg(options::OPT_nostdlib) &&
+	 +       !Args.hasArg(options::OPT_nostartfiles)) {
+	 +       CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crt1.o")));
+	 +       CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crti.o")));
+	 +       CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crtbegin.o")));
+	 +       CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crtn.o")));
+	 +   }*/
+
+	Args.AddAllArgs(CmdArgs, options::OPT_L);
+	Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
+	Args.AddAllArgs(CmdArgs, options::OPT_e);
+
+	AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
+
+	addProfileRT(getToolChain(), Args, CmdArgs);
+
+	if (!Args.hasArg(options::OPT_nostdlib) &&
+			!Args.hasArg(options::OPT_nodefaultlibs)) {
+		if (D.CCCIsCXX()) {
+			getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
+			CmdArgs.push_back("-lm");
+		}
+	}
+
+	// We already have no stdlib...
+	/*if (!Args.hasArg(options::OPT_nostdlib) &&
+	 * !Args.hasArg(options::OPT_nostartfiles)) {
+		if (Args.hasArg(options::OPT_pthread))
+			CmdArgs.push_back("-lpthread");
+			CmdArgs.push_back("-lc");
+			CmdArgs.push_back("-lCompilerRT-Generic");
+			CmdArgs.push_back("-L/usr/pkg/compiler-rt/lib");
+			CmdArgs.push_back(
+			Args.MakeArgString(getToolChain().GetFilePath("crtend.o")));
+		 }*/
+
+	const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
+	C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
+}
+#endif
+
+void hermit::Link::ConstructJob(Compilation &C, const JobAction &JA,
+								const InputInfo &Output,
+								const InputInfoList &Inputs,
+								const ArgList &Args,
+								const char *LinkingOutput) const {
+	const Driver &D = getToolChain().getDriver();
+	ArgStringList CmdArgs;
+
+	if (Output.isFilename()) {
+		CmdArgs.push_back("-o");
+		CmdArgs.push_back(Output.getFilename());
+	} else {
+		assert(Output.isNothing() && "Invalid output.");
+	}
+
+	/* if (!Args.hasArg(options::OPT_nostdlib) &&
+		!Args.hasArg(options::OPT_nostartfiles)) {
+		CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crt1.o")));
+		CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crti.o")));
+		CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crtbegin.o")));
+		CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crtn.o")));
+	}*/
+
+	Args.AddAllArgs(CmdArgs, options::OPT_L);
+	Args.AddAllArgs(CmdArgs, options::OPT_T_Group);
+	Args.AddAllArgs(CmdArgs, options::OPT_e);
+
+	AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs);
+
+	addProfileRT(getToolChain(), Args, CmdArgs);
+
+	if (!Args.hasArg(options::OPT_nostdlib) &&
+		!Args.hasArg(options::OPT_nodefaultlibs)) {
+		if (D.CCCIsCXX()) {
+			getToolChain().AddCXXStdlibLibArgs(Args, CmdArgs);
+			CmdArgs.push_back("-lm");
+		}
+	}
+
+	// We already have no stdlib...
+	/*if (!Args.hasArg(options::OPT_nostdlib) &&
+		!Args.hasArg(options::OPT_nostartfiles)) {
+		if (Args.hasArg(options::OPT_pthread))
+			CmdArgs.push_back("-lpthread");
+			CmdArgs.push_back("-lc");
+			CmdArgs.push_back("-lCompilerRT-Generic");
+			CmdArgs.push_back("-L/usr/pkg/compiler-rt/lib");
+			CmdArgs.push_back(
+			Args.MakeArgString(getToolChain().GetFilePath("crtend.o")));
+		}*/
+
+	const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
+//	printf("Linker Path = %s\n", Exec);
+	C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs));
+}

@@ -39,6 +39,18 @@ using namespace clang::driver::toolchains;
 using namespace clang;
 using namespace llvm::opt;
 
+Hermit::Hermit(const Driver &D, const llvm::Triple& Triple, 
+		const ArgList &Args) : Generic_ELF(D, Triple, Args) {
+}
+
+Tool *Hermit::buildAssembler() const {
+	return new tools::hermit::Assemble(*this);
+}
+
+Tool *Hermit::buildLinker() const {
+	return new tools::hermit::Link(*this);
+}
+
 MachO::MachO(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
     : ToolChain(D, Triple, Args) {
   // We expect 'as', 'ld', etc. to be adjacent to our install dir.

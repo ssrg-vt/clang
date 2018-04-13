@@ -666,6 +666,16 @@ protected:
   Tool *buildLinker() const override;
 };
 
+class LLVM_LIBRARY_VISIBILITY Hermit : public Generic_ELF {
+public:
+	Hermit(const Driver &D, const llvm::Triple &Triple,
+			const llvm::opt::ArgList &Args);
+
+protected:
+	Tool *buildAssembler() const override;
+	Tool *buildLinker() const override;
+};
+
 class LLVM_LIBRARY_VISIBILITY Linux : public Generic_ELF {
 public:
   Linux(const Driver &D, const llvm::Triple &Triple,
